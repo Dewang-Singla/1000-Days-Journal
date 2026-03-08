@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0F0F0F;
+    --bg-secondary: #1A1A1A;
+    --bg-card: #222222;
+    --bg-card-hover: #2A2A2A;
+    --text-primary: #F5F0E8;
+    --text-secondary: #B8B0A0;
+    --text-muted: #6B6560;
+    --accent: #F59E0B;
+    --accent-hover: #D97706;
+    --accent-subtle: rgba(245, 158, 11, 0.12);
+    --border: #333333;
+    --border-subtle: #2A2A2A;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --mood-1: #EF4444;
+    --mood-2: #F97316;
+    --mood-3: #FB923C;
+    --mood-4: #FBBF24;
+    --mood-5: #FCD34D;
+    --mood-6: #A3E635;
+    --mood-7: #4ADE80;
+    --mood-8: #34D399;
+    --mood-9: #2DD4BF;
+    --mood-10: #F59E0B;
+  }
+
+  .light {
+    --bg-primary: #FAF7F2;
+    --bg-secondary: #F0EBE3;
+    --bg-card: #FFFFFF;
+    --bg-card-hover: #F5F0E8;
+    --text-primary: #1A1612;
+    --text-secondary: #5C5248;
+    --text-muted: #9C9288;
+    --border: #E0D8CE;
+    --border-subtle: #EDE8E0;
+    --accent-subtle: rgba(245, 158, 11, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Playfair Display', serif;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+}
+
+@layer components {
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    transition: background 0.2s ease, box-shadow 0.2s ease,
+                transform 0.2s ease;
+  }
+  .card:hover {
+    background: var(--bg-card-hover);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    transform: translateY(-1px);
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 8px;
+    transition: background 0.2s, transform 0.1s;
+    cursor: pointer;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tag-chip {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border: 1px solid rgba(245,158,11,0.2);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .input-base {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 10px 14px;
+    width: 100%;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .input-base:focus { border-color: var(--accent); }
+  .input-base::placeholder { color: var(--text-muted); }
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+  .saving-indicator {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: opacity 0.3s;
+  }
+}
+
+/* ── Animations ───────────────────────────────────────── */
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-6px); }
+  80%       { transform: translateX(6px); }
+}
+
+.page-transition {
+  animation: fadeSlideIn 0.25s ease forwards;
+}
+
+.shake {
+  animation: shake 0.4s ease;
+}
