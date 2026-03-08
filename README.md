@@ -171,9 +171,3 @@ The optional **PIN lock** uses SHA-256 hashing stored in `localStorage`. It prot
 | 730 | 8 Mar 2028 | Two full years |
 | 750 | 28 Mar 2028 | Three-quarters |
 | 1000 | 3 Dec 2028 | **Day 1,000** — journey complete 🎉 |
-
----
-
-## License
-
-Private project — not published under an open-source licence.
