@@ -19,10 +19,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import storage from "../storage";
 import {
-  ORIGIN,
+  TRIAL_START,
   JOURNAL_END,
   getDayNumber,
-  isReflectionDay,
+  getJourneyDateType,
+  getJourneyTheme,
   isValidJournalDate,
   dateToId,
 } from "../utils/dates";
@@ -31,7 +32,7 @@ import type { DayEntry } from "../db";
 
 /* ── Constants ────────────────────────────────────────────── */
 
-const MIN_MONTH = startOfMonth(ORIGIN);
+const MIN_MONTH = startOfMonth(TRIAL_START);
 const MAX_MONTH = startOfMonth(JOURNAL_END);
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = [
@@ -49,16 +50,16 @@ const MONTH_NAMES = [
   "Dec",
 ];
 const YEAR_OPTIONS = Array.from(
-  { length: JOURNAL_END.getFullYear() - ORIGIN.getFullYear() + 1 },
-  (_, idx) => ORIGIN.getFullYear() + idx,
+  { length: JOURNAL_END.getFullYear() - TRIAL_START.getFullYear() + 1 },
+  (_, idx) => TRIAL_START.getFullYear() + idx,
 );
 
 function getMonthBoundsForYear(year: number): { min: number; max: number } {
-  const isStartYear = year === ORIGIN.getFullYear();
+  const isStartYear = year === TRIAL_START.getFullYear();
   const isEndYear = year === JOURNAL_END.getFullYear();
 
   return {
-    min: isStartYear ? ORIGIN.getMonth() : 0,
+    min: isStartYear ? TRIAL_START.getMonth() : 0,
     max: isEndYear ? JOURNAL_END.getMonth() : 11,
   };
 }
@@ -84,8 +85,14 @@ const legendItems = [
   { color: "rgba(250,204,21,0.5)", border: "transparent", label: "6-7 Good" },
   { color: "rgba(74,222,128,0.5)", border: "transparent", label: "8-9 Great" },
   { color: "rgba(245,158,11,0.6)", border: "transparent", label: "10 Legendary" },
-  { color: "rgba(245, 158, 11, 0.2)", border: "rgba(245, 158, 11, 0.5)", label: "Every 101st day (Reflect)" },
   { color: "transparent", border: "transparent", label: "★ Highlight", isHighlight: true },
+];
+
+const journeyLegendItems = [
+  { color: "rgba(56,189,248,0.18)", border: "rgba(56,189,248,0.35)", label: "May 2026 trial month" },
+  { color: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.28)", label: "Common journey day" },
+  { color: "rgba(167,139,250,0.18)", border: "rgba(167,139,250,0.35)", label: "Monthly reflection day" },
+  { color: "rgba(251,191,36,0.2)", border: "rgba(251,191,36,0.42)", label: "Golden reflection day" },
 ];
 
 /* ── Component ────────────────────────────────────────────── */
@@ -106,7 +113,7 @@ export default function Calendar() {
       }
     }
 
-    if (isBefore(today, ORIGIN)) return startOfMonth(ORIGIN);
+    if (isBefore(today, TRIAL_START)) return startOfMonth(TRIAL_START);
     if (isAfter(today, JOURNAL_END)) return startOfMonth(JOURNAL_END);
     return startOfMonth(today);
   });
@@ -286,9 +293,9 @@ export default function Calendar() {
         </button>
         <button
           className="btn-ghost text-xs px-3 py-1"
-          onClick={() => jumpToMonth(ORIGIN.getFullYear(), ORIGIN.getMonth())}
+          onClick={() => jumpToMonth(TRIAL_START.getFullYear(), TRIAL_START.getMonth())}
         >
-          {format(ORIGIN, "MMM yyyy")}
+          {format(TRIAL_START, "MMM yyyy")}
         </button>
         <button
           className="btn-ghost text-xs px-3 py-1"
@@ -349,11 +356,10 @@ export default function Calendar() {
           const inMonth = isSameMonth(day, currentMonth);
           const isCurrentDay = isTodayFn(day);
           const isValid = isValidJournalDate(day);
-          const beforeStart = isBefore(day, ORIGIN);
+          const beforeStart = isBefore(day, TRIAL_START);
           const dayNum = getDayNumber(day);
 
           const isFuture = isAfter(startOfDay(day), startOfDay(today));
-          const isReflectionCycleDay = isReflectionDay(day);
 
           return (
             <CalendarCell
@@ -364,7 +370,6 @@ export default function Calendar() {
               inMonth={inMonth}
               isToday={isCurrentDay}
               isValid={isValid}
-              isReflectionDay={isReflectionCycleDay}
               beforeStart={beforeStart}
               isFuture={isFuture}
               onClick={() => {
@@ -381,6 +386,18 @@ export default function Calendar() {
         className="flex flex-wrap gap-4 justify-center py-3"
         style={{ borderTop: "1px solid var(--border-subtle)" }}
       >
+        {journeyLegendItems.map((item) => (
+          <div key={item.label} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            <span
+              className="w-3 h-3 rounded-full inline-block"
+              style={{
+                background: item.color,
+                border: item.border !== "transparent" ? `1px solid ${item.border}` : "none",
+              }}
+            />
+            {item.label}
+          </div>
+        ))}
         {legendItems.map((item) => (
           <div key={item.label} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
             {item.isHighlight ? (
@@ -439,7 +456,6 @@ function CalendarCell({
   inMonth,
   isToday,
   isValid,
-  isReflectionDay,
   beforeStart,
   isFuture,
   onClick,
@@ -450,12 +466,13 @@ function CalendarCell({
   inMonth: boolean;
   isToday: boolean;
   isValid: boolean;
-  isReflectionDay: boolean;
   beforeStart: boolean;
   isFuture: boolean;
   onClick: () => void;
 }) {
   const dayOfMonth = day.getDate();
+  const journeyType = getJourneyDateType(day);
+  const journeyTheme = getJourneyTheme(day);
 
   /* Outside current month */
   if (!inMonth) {
@@ -469,7 +486,7 @@ function CalendarCell({
     );
   }
 
-  /* Before journey start */
+  /* Before trial month start */
   if (beforeStart) {
     return (
       <div
@@ -481,21 +498,59 @@ function CalendarCell({
     );
   }
 
-  /* Reflection cycle day: every 101st day */
-  if (isReflectionDay) {
+  /* Golden reflection day */
+  if (journeyType === "golden") {
     return (
       <button
         onClick={onClick}
         className="min-h-[60px] lg:min-h-[80px] rounded-lg p-1.5 text-xs cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
         style={{
-          background: "rgba(245, 158, 11, 0.15)",
-          border: isToday ? "2px solid var(--accent)" : "1px solid rgba(245, 158, 11, 0.3)",
+          background: journeyTheme.accentSoft,
+          border: isToday ? `2px solid ${journeyTheme.accent}` : `1px solid ${journeyTheme.border}`,
           color: "var(--text-secondary)",
         }}
       >
         <span className="text-xs">{dayOfMonth}</span>
-        <span style={{ color: "rgba(245, 158, 11, 0.9)", fontSize: 16 }}>✨</span>
-        <span style={{ color: "rgba(245, 158, 11, 0.9)", fontSize: 8 }}>Reflect</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 16 }}>✨</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 8 }}>Golden</span>
+      </button>
+    );
+  }
+
+  /* Monthly reflection day */
+  if (journeyType === "monthly-reflection") {
+    return (
+      <button
+        onClick={onClick}
+        className="min-h-[60px] lg:min-h-[80px] rounded-lg p-1.5 text-xs cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
+        style={{
+          background: journeyTheme.accentSoft,
+          border: isToday ? `2px solid ${journeyTheme.accent}` : `1px solid ${journeyTheme.border}`,
+          color: "var(--text-secondary)",
+        }}
+      >
+        <span className="text-xs">{dayOfMonth}</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 16 }}>🌓</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 8 }}>Reflect</span>
+      </button>
+    );
+  }
+
+  /* Trial month day */
+  if (journeyType === "trial") {
+    return (
+      <button
+        onClick={onClick}
+        className="min-h-[60px] lg:min-h-[80px] rounded-lg p-1.5 text-xs cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
+        style={{
+          background: journeyTheme.accentSoft,
+          border: isToday ? `2px solid ${journeyTheme.accent}` : `1px solid ${journeyTheme.border}`,
+          color: "var(--text-secondary)",
+        }}
+      >
+        <span className="text-xs">{dayOfMonth}</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 16 }}>🧪</span>
+        <span style={{ color: journeyTheme.accent, fontSize: 8 }}>Try</span>
       </button>
     );
   }

@@ -26,18 +26,26 @@ import {
 
 import { isAfter, startOfDay, parseISO, addDays, format } from "date-fns";
 
+import storage from "../storage";
 import { useEntryStore } from "../store/entryStore";
 import { useFreezeStore } from "../store/freezeStore";
 import { useHabitStore } from "../store/habitStore";
 import {
   formatDayHeader,
+  getJourneyDateType,
+  getJourneyTheme,
+  isMainJourneyDate,
+  isTrialMonth,
   isValidJournalDate,
   dateToId,
   getTodayDateId,
-  ORIGIN,
   JOURNAL_END,
-  TOTAL_JOURNAL_DAYS,
+  GOLDEN_REFLECTION_DAY,
+  TOTAL_TRIAL_DAYS,
+  TRIAL_START,
 } from "../utils/dates";
+import { DEFAULT_CHECKPOINTS, normalizeCheckpointPrompts } from "../utils/checkpoints";
+import { hasEntryContent } from "../utils/html";
 import type { Todo, Memory, HabitLog } from "../db";
 
 /* ── Date picker constants ──────────────────────────────── */
@@ -46,48 +54,18 @@ const MONTH_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 const YEAR_OPTIONS = Array.from(
-  { length: JOURNAL_END.getFullYear() - ORIGIN.getFullYear() + 1 },
-  (_, idx) => ORIGIN.getFullYear() + idx,
+  { length: JOURNAL_END.getFullYear() - TRIAL_START.getFullYear() + 1 },
+  (_, idx) => TRIAL_START.getFullYear() + idx,
 );
 
 function getMonthBoundsForYear(year: number): { min: number; max: number } {
-  const isStartYear = year === ORIGIN.getFullYear();
+  const isStartYear = year === TRIAL_START.getFullYear();
   const isEndYear = year === JOURNAL_END.getFullYear();
   return {
-    min: isStartYear ? ORIGIN.getMonth() : 0,
+    min: isStartYear ? TRIAL_START.getMonth() : 0,
     max: isEndYear ? JOURNAL_END.getMonth() : 11,
   };
 }
-
-/* ── Mood config ──────────────────────────────────────────── */
-
-const moodColors = [
-  "#4B5563",        // 0 - dark grey (wasted)
-  "var(--mood-1)",
-  "var(--mood-2)",
-  "var(--mood-3)",
-  "var(--mood-4)",
-  "var(--mood-5)",
-  "var(--mood-6)",
-  "var(--mood-7)",
-  "var(--mood-8)",
-  "var(--mood-9)",
-  "var(--mood-10)",
-];
-
-const ratingMoodMap: Record<number, { emoji: string; label: string }> = {
-  0:  { emoji: "💀", label: "Lost" },
-  1:  { emoji: "😔", label: "Terrible" },
-  2:  { emoji: "😞", label: "Rough" },
-  3:  { emoji: "😕", label: "Bad" },
-  4:  { emoji: "😐", label: "Meh" },
-  5:  { emoji: "🙂", label: "Okay" },
-  6:  { emoji: "😊", label: "Good" },
-  7:  { emoji: "😄", label: "Great" },
-  8:  { emoji: "🌟", label: "Excellent" },
-  9:  { emoji: "🔥", label: "Amazing" },
-  10: { emoji: "✨", label: "Legendary" },
-};
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -155,6 +133,7 @@ export default function DayEntry() {
   const applyFreeze = useFreeze;
 
   const [freezeMsg, setFreezeMsg] = useState<string | null>(null);
+  const [trialUnlocked, setTrialUnlocked] = useState<boolean | null>(null);
 
   /* ── Refs for auto-save ───────────────────────────────── */
   const hasModified = useRef(false);
@@ -176,6 +155,29 @@ export default function DayEntry() {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [dateId, loadEntry, loadHabits, loadFreezes, clearCurrentEntry]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!isMainJourneyDate(date)) {
+        if (!cancelled) setTrialUnlocked(true);
+        return;
+      }
+
+      const allEntries = await storage.getAllEntries();
+      const trialEntries = allEntries.filter((entry) => isTrialMonth(parseISO(entry.date)));
+      const complete =
+        trialEntries.length === TOTAL_TRIAL_DAYS &&
+        trialEntries.every((entry) => hasEntryContent(entry) && entry.moodRating >= 0);
+
+      if (!cancelled) setTrialUnlocked(complete);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dateId, date]);
 
   /* ── Auto-save debounce ───────────────────────────────── */
   useEffect(() => {
@@ -254,7 +256,8 @@ export default function DayEntry() {
       const updated = {
         ...currentEntry,
         moodRating: 3,
-        moodEmoji: "😕",
+        moodEmoji: "",
+        ratingChecks: [true, true, true, false, false, false, false, false, false, false],
         updatedAt: new Date().toISOString(),
       };
       saveEntry(updated);
@@ -262,10 +265,17 @@ export default function DayEntry() {
     }
   }, [graceExpired, currentEntry, saveEntry]);
 
+  const journeyType = getJourneyDateType(date);
+  const journeyTheme = getJourneyTheme(date);
+  const displayChecks = currentEntry?.ratingChecks?.length === 10
+    ? currentEntry.ratingChecks
+    : Array.from({ length: 10 }, () => false);
+  const displayPrompts = normalizeCheckpointPrompts(currentEntry?.checkpointPrompts);
+
   if (!isValidJournalDate(date)) {
-    const isBeforeJourneyStart = new Date() < ORIGIN;
+    const isBeforeJourneyStart = new Date() < TRIAL_START;
     const todayOrStart = isBeforeJourneyStart
-      ? dateToId(ORIGIN)
+      ? dateToId(TRIAL_START)
       : getTodayDateId();
 
     return (
@@ -280,13 +290,48 @@ export default function DayEntry() {
               Outside your journey
             </h2>
             <p style={{ color: "var(--text-muted)" }}>
-              This date is outside your {TOTAL_JOURNAL_DAYS}-day journey ({format(ORIGIN, "MMM d, yyyy")} - {format(JOURNAL_END, "MMM d, yyyy")})
+              This date is outside your journey window ({format(TRIAL_START, "MMM d, yyyy")} - {format(GOLDEN_REFLECTION_DAY, "MMM d, yyyy")})
             </p>
             <button
               className="btn-primary"
               onClick={() => navigate(`/entry/${todayOrStart}`)}
             >
-              {isBeforeJourneyStart ? "← Go to First Day" : "← Go to Today"}
+              {isBeforeJourneyStart ? "← Go to Trial Start" : "← Go to Today"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (trialUnlocked === null) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (isMainJourneyDate(date) && !trialUnlocked) {
+    return (
+      <div className="page-transition max-w-3xl mx-auto pb-20">
+        <div className="flex flex-col items-center justify-center py-24 gap-5">
+          <div className="card p-10 flex flex-col items-center gap-5 text-center max-w-md w-full" style={{ borderTop: "4px solid #38BDF8" }}>
+            <span className="text-5xl">🔒</span>
+            <h2
+              className="text-2xl font-serif font-bold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Main journey is locked
+            </h2>
+            <p style={{ color: "var(--text-muted)" }}>
+              Complete every day in the May 2026 trial month to unlock June 1, 2026.
+            </p>
+            <button
+              className="btn-primary"
+              onClick={() => navigate(`/entry/${dateToId(TRIAL_START)}`)}
+            >
+              Go to Trial Month
             </button>
           </div>
         </div>
@@ -331,15 +376,14 @@ export default function DayEntry() {
 
   /* ── Entry window closed — read-only state ───────────── */
   if (isEntryClosed) {
-    const mood = ratingMoodMap[wasAutoRated ? 3 : currentEntry.moodRating];
-    const displayRating = wasAutoRated ? 3 : currentEntry.moodRating;
+    const completedChecks = displayChecks.filter(Boolean).length;
     const isUnwritten =
       stripHtmlDayEntry(currentEntry.journal).trim().length === 0 &&
       currentEntry.todos.length === 0 &&
       currentEntry.memories.length === 0;
     const hasFreezeForDate = freezes.some((f) => f.forDateId === dateId);
     return (
-      <div className="page-transition max-w-3xl mx-auto pb-20 space-y-8">
+      <div className="page-transition max-w-3xl mx-auto pb-20 space-y-8" style={{ ["--accent" as string]: journeyTheme.accent }}>
         <Header
           dateId={dateId}
           date={date}
@@ -350,6 +394,13 @@ export default function DayEntry() {
           onNavigate={(dir) => navigate(`/entry/${addDaysToId(dateId, dir)}`)}
           nextDisabled={nextIsFuture}
         />
+
+        <div className="card p-4" style={{ background: journeyTheme.surfaceSoft, border: `1px solid ${journeyTheme.border}`, color: "var(--text-secondary)" }}>
+          {journeyType === "trial" && "Trial month: build the habit, write every day, and eliminate distractions."}
+          {journeyType === "common" && "Common journey day."}
+          {journeyType === "monthly-reflection" && "Monthly reflection day: last Sunday of the month."}
+          {journeyType === "golden" && "Golden reflection day: the 10-year closing reflection."}
+        </div>
 
         {/* Lock notice */}
         <div className="card p-6 flex flex-col items-center gap-4 text-center">
@@ -416,33 +467,53 @@ export default function DayEntry() {
           </button>
         </div>
 
-        {/* Read-only mood */}
+        {/* Read-only checkpoints */}
         <section className="card p-5 space-y-4">
-          <h3 className="section-title">How was your day?</h3>
-          <div className="flex gap-2 flex-wrap">
-            {moodColors.map((color, i) => (
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="section-title" style={{ marginBottom: 0 }}>Daily Checkpoints</h3>
+            <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+              {completedChecks}/10
+            </span>
+          </div>
+          <div className="grid gap-2">
+            {displayChecks.map((checked, index) => (
               <div
-                key={i}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                key={`${displayPrompts[index]}-${index}`}
+                className="flex items-start gap-3 rounded-xl p-3"
                 style={{
-                  background: color,
-                  opacity: displayRating === i ? 1 : 0.2,
-                  color: i === 0 ? "#fff" : "#000",
+                  background: checked ? "rgba(16,185,129,0.08)" : "var(--bg-secondary)",
+                  border: checked ? "1px solid rgba(16,185,129,0.35)" : "1px solid var(--border)",
                 }}
               >
-                {i}
+                <span
+                  className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border"
+                  style={{
+                    background: checked ? "var(--accent)" : "transparent",
+                    borderColor: checked ? "var(--accent)" : "var(--border)",
+                    color: checked ? "#000" : "var(--text-muted)",
+                  }}
+                >
+                  {checked ? "✓" : String(index + 1)}
+                </span>
+                <span className="flex-1 text-sm" style={{ color: "var(--text-primary)" }}>
+                  {displayPrompts[index] || "Checkpoint removed"}
+                </span>
               </div>
             ))}
           </div>
-          {mood && (
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-3xl">{mood.emoji}</span>
-              <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-                {mood.label}
-              </span>
-            </div>
-          )}
         </section>
+
+        {!!currentEntry.quoteOfDay.trim() && (
+          <section className="card p-5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="section-title" style={{ marginBottom: 0 }}>Quote of the Day</h3>
+              {currentEntry.isQuoteStarred && <span title="Starred quote">⭐</span>}
+            </div>
+            <p className="text-sm italic" style={{ color: "var(--text-secondary)" }}>
+              "{currentEntry.quoteOfDay.trim()}"
+            </p>
+          </section>
+        )}
 
         {/* Read-only journal */}
         {stripHtmlDayEntry(currentEntry.journal).trim().length > 0 && (
@@ -590,7 +661,7 @@ export default function DayEntry() {
             color: "var(--text-secondary)",
           }}
         >
-          Reflection sections (mood, journal, habits, tags, gratitude, memories) unlock at 8:00 PM.
+          Reflection sections (checkpoints, journal, habits, tags, gratitude, memories, quote) unlock at 8:00 PM.
           {countdown ? ` Unlocks in ${countdown}.` : ""} To-dos stay editable until 8:00 PM.
         </div>
       )}
@@ -609,18 +680,54 @@ export default function DayEntry() {
       )}
 
       {/* ── Mood ───────────────────────────────────────── */}
-      <MoodSection
-        rating={currentEntry.moodRating}
+      <CheckpointSection
+        checks={displayChecks}
+        prompts={displayPrompts}
         readOnly={!isReflectionEditable}
-        onRate={(r) => {
-          if (r === currentEntry.moodRating) {
-            updateField("moodRating", -1);
-            updateField("moodEmoji", "");
-          } else {
-            updateField("moodRating", r);
-            updateField("moodEmoji", ratingMoodMap[r]?.emoji ?? "");
+        onToggle={(index) => {
+          const nextChecks = [...displayChecks];
+          nextChecks[index] = !nextChecks[index];
+          const nextScore = nextChecks.filter(Boolean).length;
+          updateField("ratingChecks", nextChecks);
+          updateField("moodRating", nextScore);
+          updateField("moodEmoji", "");
+        }}
+        onPromptChange={(index, value) => {
+          const nextPrompts = [...displayPrompts];
+          nextPrompts[index] = value;
+          updateField("checkpointPrompts", normalizeCheckpointPrompts(nextPrompts));
+        }}
+        onRemovePrompt={(index) => {
+          const nextPrompts = [...displayPrompts];
+          nextPrompts[index] = "";
+          const nextChecks = [...displayChecks];
+          nextChecks[index] = false;
+          updateField("checkpointPrompts", normalizeCheckpointPrompts(nextPrompts));
+          updateField("ratingChecks", nextChecks);
+          updateField("moodRating", nextChecks.filter(Boolean).length);
+          updateField("moodEmoji", "");
+        }}
+        onAddPrompt={() => {
+          const emptyIndex = displayPrompts.findIndex((item) => item.trim().length === 0);
+          if (emptyIndex === -1) return;
+          const nextPrompts = [...displayPrompts];
+          nextPrompts[emptyIndex] = `New checkpoint ${emptyIndex + 1}`;
+          updateField("checkpointPrompts", normalizeCheckpointPrompts(nextPrompts));
+        }}
+        onResetPrompts={() => updateField("checkpointPrompts", normalizeCheckpointPrompts(DEFAULT_CHECKPOINTS))}
+      />
+
+      <QuoteSection
+        quote={currentEntry.quoteOfDay}
+        starred={currentEntry.isQuoteStarred}
+        editable={isReflectionEditable}
+        onChange={(quote) => {
+          updateField("quoteOfDay", quote);
+          if (quote.trim().length === 0 && currentEntry.isQuoteStarred) {
+            updateField("isQuoteStarred", false);
           }
         }}
+        onToggleStar={() => updateField("isQuoteStarred", !currentEntry.isQuoteStarred)}
       />
 
       {/* ── Journal ────────────────────────────────────── */}
@@ -805,8 +912,8 @@ function DateJumper({
     onJump(today);
   };
 
-  const jumpToOrigin = () => {
-    onJump(ORIGIN);
+  const jumpToTrialStart = () => {
+    onJump(TRIAL_START);
   };
 
   const jumpToEnd = () => {
@@ -824,9 +931,9 @@ function DateJumper({
       </button>
       <button
         className="btn-ghost px-3 py-1 text-xs"
-        onClick={jumpToOrigin}
+        onClick={jumpToTrialStart}
       >
-        {format(ORIGIN, "MMM yyyy")}
+        {format(TRIAL_START, "MMM yyyy")}
       </button>
       <button
         className="btn-ghost px-3 py-1 text-xs"
@@ -866,58 +973,181 @@ function DateJumper({
   );
 }
 
-/* ── Mood Section ──────────────────────────────────────────── */
+/* ── Checkpoint Section ───────────────────────────────────── */
 
-function MoodSection({
-  rating,
+function CheckpointSection({
+  checks,
+  prompts,
   readOnly,
-  onRate,
+  onToggle,
+  onPromptChange,
+  onRemovePrompt,
+  onAddPrompt,
+  onResetPrompts,
 }: {
-  rating: number;
+  checks: boolean[];
+  prompts: string[];
   readOnly: boolean;
-  onRate: (r: number) => void;
+  onToggle: (index: number) => void;
+  onPromptChange: (index: number, value: string) => void;
+  onRemovePrompt: (index: number) => void;
+  onAddPrompt: () => void;
+  onResetPrompts: () => void;
 }) {
-  const mood = ratingMoodMap[rating];
+  const score = checks.filter(Boolean).length;
+  const hasEmptySlot = prompts.some((prompt) => prompt.trim().length === 0);
 
   return (
     <section className="card p-5 space-y-4">
-      <h3 className="section-title">How was your day?</h3>
-      {/* Number buttons 0-10 */}
-      <div className="flex gap-2 flex-wrap">
-        {moodColors.map((color, i) => {
-          const n = i; // 0 through 10
-          const selected = rating === n;
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="section-title" style={{ marginBottom: 0 }}>Daily Checkpoints</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+            {score}/10
+          </span>
+          {!readOnly && (
+            <>
+              <button
+                type="button"
+                className="btn-ghost text-xs px-2 py-1"
+                onClick={onAddPrompt}
+                disabled={!hasEmptySlot}
+                title={hasEmptySlot ? "Add prompt to an empty slot" : "All 10 prompts already filled"}
+              >
+                + Add
+              </button>
+              <button
+                type="button"
+                className="btn-ghost text-xs px-2 py-1"
+                onClick={onResetPrompts}
+              >
+                Reset Default 10
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        {prompts.map((question, index) => {
+          const checked = checks[index] ?? false;
           return (
-            <button
-              key={n}
-              onClick={() => {
-                if (!readOnly) onRate(n);
-              }}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
-              disabled={readOnly}
+            <div
+              key={`${index}-${question}`}
+              className="rounded-xl p-3 transition-all"
               style={{
-                background: color,
-                opacity: selected ? 1 : 0.2,
-                color: n === 0 ? "#fff" : "#000",
-                border: "none",
-                boxShadow: selected ? `0 0 0 3px ${color}44` : "none",
-                cursor: readOnly ? "not-allowed" : "pointer",
+                background: checked ? "rgba(16,185,129,0.08)" : "var(--bg-secondary)",
+                border: checked ? "1px solid rgba(16,185,129,0.35)" : "1px solid var(--border)",
+                opacity: readOnly ? 0.9 : 1,
               }}
             >
-              {n}
-            </button>
+              <div className="flex items-start gap-3">
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => {
+                    if (!readOnly) onToggle(index);
+                  }}
+                  className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border"
+                  style={{
+                    background: checked ? "var(--accent)" : "transparent",
+                    borderColor: checked ? "var(--accent)" : "var(--border)",
+                    color: checked ? "#000" : "var(--text-muted)",
+                  }}
+                  title={`Toggle checkpoint ${index + 1}`}
+                >
+                  {checked ? "✓" : String(index + 1)}
+                </button>
+                <div className="flex-1">
+                  {readOnly ? (
+                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                      {question || "Checkpoint removed"}
+                    </span>
+                  ) : (
+                    <input
+                      type="text"
+                      value={question}
+                      onChange={(e) => onPromptChange(index, e.target.value.slice(0, 180))}
+                      placeholder={`Checkpoint ${index + 1}`}
+                      className="w-full rounded-lg px-3 py-2 text-sm"
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-primary)",
+                      }}
+                    />
+                  )}
+                </div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="btn-ghost px-2 py-1 text-xs"
+                    onClick={() => onRemovePrompt(index)}
+                    title={`Remove checkpoint ${index + 1}`}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
-      {/* Auto-mapped emoji display */}
-      {mood && (
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-3xl">{mood.emoji}</span>
-          <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-            {mood.label}
-          </span>
-        </div>
+
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        You always have 10 checkpoints. Remove clears a slot, Add refills an empty slot.
+      </p>
+    </section>
+  );
+}
+
+function QuoteSection({
+  quote,
+  starred,
+  editable,
+  onChange,
+  onToggleStar,
+}: {
+  quote: string;
+  starred: boolean;
+  editable: boolean;
+  onChange: (value: string) => void;
+  onToggleStar: () => void;
+}) {
+  return (
+    <section className="card p-5 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="section-title" style={{ marginBottom: 0 }}>Quote of the Day</h3>
+        <button
+          type="button"
+          disabled={!editable || quote.trim().length === 0}
+          onClick={onToggleStar}
+          className="btn-ghost text-xs px-2 py-1"
+          title={starred ? "Unstar quote" : "Star quote"}
+        >
+          {starred ? "★ Starred" : "☆ Star"}
+        </button>
+      </div>
+      {editable ? (
+        <textarea
+          value={quote}
+          onChange={(e) => onChange(e.target.value.slice(0, 400))}
+          placeholder="Write a quote you want to remember from today..."
+          className="w-full min-h-[92px] rounded-xl px-3 py-2 text-sm"
+          style={{
+            background: "var(--bg-secondary)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border)",
+          }}
+        />
+      ) : (
+        <p className="text-sm italic" style={{ color: "var(--text-secondary)" }}>
+          {quote.trim().length > 0 ? `"${quote.trim()}"` : "No quote added for this day."}
+        </p>
       )}
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Starred quotes appear on the dashboard.
+      </p>
     </section>
   );
 }

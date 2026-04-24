@@ -1,22 +1,35 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, differenceInCalendarDays, parseISO, addDays, subDays } from "date-fns";
+import { format, differenceInCalendarDays, parseISO, addDays, subDays, isBefore } from "date-fns";
 import { ChevronRight } from "lucide-react";
 
 import storage from "../storage";
 import { useFreezeStore } from "../store/freezeStore";
 import {
-  getDayNumber,
+  getJourneyDayNumber,
+  getTrialDayNumber,
   getTodayDateId,
   getDateFromDayNumber,
-  isValidJournalDate,
+  isTrialMonth,
+  isMainJourneyDate,
+  isGoldenReflectionDay,
+  TRIAL_START,
   dateToId,
-  ORIGIN,
   TOTAL_JOURNAL_DAYS,
+  TOTAL_TRIAL_DAYS,
 } from "../utils/dates";
 import { hasEntryContent, stripHtml } from "../utils/html";
 import type { DayEntry } from "../db";
 import { InstallBanner } from "../components/PWAInstallPrompt";
+
+const ACTION_MESSAGES = [
+  "Do not just dream - act. Constantly thinking about your goals can create a false sense of productivity. Progress comes from execution.",
+  "Do not fear failure. Fear of failing and perfectionism keep you stuck in planning. Imperfect action beats perfect inaction.",
+  "Do not wait for the right moment. Readiness does not come before action - it comes because of action.",
+  "Do not let overthinking drain you. Analysis paralysis kills momentum. Clarity often comes after movement.",
+  "Align your identity with your goals. Do not force discipline - become someone who is disciplined.",
+  "Get addicted to effort, not potential. Real growth is repetitive, slow, and uncomfortable. Love the process.",
+];
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -91,11 +104,16 @@ function computeAverageMood(entries: DayEntry[]): number {
 }
 
 const PHASES = [
-  { name: "Initiation", start: 1, end: 505, emoji: "🌱" },
-  { name: "Consistency", start: 506, end: 1010, emoji: "🔥" },
-  { name: "Identity", start: 1011, end: 1515, emoji: "⚡" },
-  { name: "Deep Habit", start: 1516, end: 2020, emoji: "💪" },
-  { name: "Legacy", start: 2021, end: TOTAL_JOURNAL_DAYS, emoji: "👑" },
+  { name: "Checkpoint 1", start: 1, end: 350, emoji: "①" },
+  { name: "Checkpoint 2", start: 351, end: 700, emoji: "②" },
+  { name: "Checkpoint 3", start: 701, end: 1050, emoji: "③" },
+  { name: "Checkpoint 4", start: 1051, end: 1400, emoji: "④" },
+  { name: "Checkpoint 5", start: 1401, end: 1750, emoji: "⑤" },
+  { name: "Checkpoint 6", start: 1751, end: 2100, emoji: "⑥" },
+  { name: "Checkpoint 7", start: 2101, end: 2450, emoji: "⑦" },
+  { name: "Checkpoint 8", start: 2451, end: 2800, emoji: "⑧" },
+  { name: "Checkpoint 9", start: 2801, end: 3150, emoji: "⑨" },
+  { name: "Checkpoint 10", start: 3151, end: TOTAL_JOURNAL_DAYS, emoji: "⑩" },
 ];
 
 function getCurrentPhase(dayNumber: number) {
@@ -119,11 +137,23 @@ export default function Dashboard() {
 
   const today = useMemo(() => new Date(), []);
   const todayId = getTodayDateId();
-  const rawDayNumber = getDayNumber(today);
-  const journeyStarted = isValidJournalDate(today);
-  const daysUntilStart = journeyStarted
-    ? 0
-    : differenceInCalendarDays(ORIGIN, new Date());
+  const trialDayNumber = getTrialDayNumber(today);
+  const journeyDayNumber = getJourneyDayNumber(today);
+  const trialUnlocked = useMemo(() => {
+    if (loading) return false;
+
+    const trialEntries = entries.filter((entry) => {
+      const entryDate = parseISO(entry.id);
+      return isTrialMonth(entryDate);
+    });
+
+    return trialEntries.length === TOTAL_TRIAL_DAYS
+      && trialEntries.every((entry) => hasEntryContent(entry) && entry.ratingChecks.length === 10 && entry.ratingChecks.some(Boolean));
+  }, [entries, loading]);
+  const trialMonthActive = isTrialMonth(today);
+  const mainJourneyActive = isMainJourneyDate(today) && trialUnlocked;
+  const goldenReflectionDay = isGoldenReflectionDay(today);
+  const showTodayCard = !isBefore(today, TRIAL_START) && !goldenReflectionDay && (trialMonthActive || mainJourneyActive);
 
   useEffect(() => {
     storage.getAllEntries().then((all) => {
@@ -195,6 +225,15 @@ export default function Dashboard() {
     [validEntries],
   );
 
+  const starredQuotes = useMemo(
+    () =>
+      validEntries
+        .filter((entry) => entry.isQuoteStarred && entry.quoteOfDay.trim().length > 0)
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .slice(0, 12),
+    [validEntries],
+  );
+
   const contentEntries = useMemo(
     () => validEntries.filter(hasEntryContent),
     [validEntries],
@@ -207,14 +246,16 @@ export default function Dashboard() {
     navigate(`/entry/${pick.id}`);
   };
 
-  const dayNumber = rawDayNumber;
-  const currentPhase = getCurrentPhase(dayNumber);
-  const phaseProgress = getPhaseProgress(dayNumber, currentPhase);
+  const displayDayNumber = mainJourneyActive ? journeyDayNumber : trialDayNumber;
+  const currentPhase = getCurrentPhase(Math.max(journeyDayNumber, 1));
+  const phaseProgress = mainJourneyActive ? getPhaseProgress(journeyDayNumber, currentPhase) : 0;
   const nextPhase = PHASES[PHASES.indexOf(currentPhase) + 1] ?? null;
-  const daysUntilNext = nextPhase ? nextPhase.start - dayNumber : 0;
-  const journeyComplete = dayNumber > TOTAL_JOURNAL_DAYS;
-  const progress = Math.min(Math.max(dayNumber / TOTAL_JOURNAL_DAYS, 0), 1);
-  const milestones = [505, 1010, 1515, 2020, 2525, 3030, TOTAL_JOURNAL_DAYS]
+  const daysUntilNext = nextPhase ? nextPhase.start - journeyDayNumber : 0;
+  const journeyComplete = journeyDayNumber > TOTAL_JOURNAL_DAYS && !goldenReflectionDay;
+  const progress = mainJourneyActive
+    ? Math.min(Math.max(journeyDayNumber / TOTAL_JOURNAL_DAYS, 0), 1)
+    : Math.min(Math.max(trialDayNumber / TOTAL_TRIAL_DAYS, 0), 1);
+  const milestones = [350, 700, 1050, 1400, 1750, 2100, 2450, 2800, 3150, TOTAL_JOURNAL_DAYS]
     .map((day) => ({ day, date: format(getDateFromDayNumber(day), "MMM d, yyyy") }));
 
   const taskStats = useMemo(() => {
@@ -248,7 +289,7 @@ export default function Dashboard() {
     <div className="page-transition max-w-4xl mx-auto space-y-8 pb-20">
       {/* ── Hero Section ─────────────────────────────────── */}
       <section className="text-center space-y-4">
-        {dayNumber <= 0 ? (
+        {isBefore(today, TRIAL_START) ? (
           <>
             <h1
               className="text-5xl font-serif font-bold"
@@ -257,14 +298,44 @@ export default function Dashboard() {
               Journey Begins Soon
             </h1>
             <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
-              Starting {format(ORIGIN, "MMMM d, yyyy")}
+              Trial month starts {format(TRIAL_START, "MMMM d, yyyy")}
             </p>
             <p className="text-sm" style={{ color: "var(--accent)" }}>
               {(() => {
-                const d = Math.abs(differenceInCalendarDays(ORIGIN, new Date()));
+                const d = Math.abs(differenceInCalendarDays(TRIAL_START, new Date()));
                 if (d === 0) return "Journey starts today!";
                 return `${d} ${d === 1 ? "day" : "days"} to go`;
               })()}
+            </p>
+          </>
+        ) : trialMonthActive && !trialUnlocked ? (
+          <>
+            <h1
+              className="text-5xl font-serif font-bold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Trial Month
+            </h1>
+            <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
+              May 1 - 31, 2026
+            </p>
+            <p className="text-sm" style={{ color: "var(--accent)" }}>
+              Complete May to unlock June 1, 2026
+            </p>
+          </>
+        ) : goldenReflectionDay ? (
+          <>
+            <h1
+              className="text-5xl font-serif font-bold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Golden Reflection Day
+            </h1>
+            <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
+              December 31, 2035
+            </p>
+            <p className="text-sm" style={{ color: "var(--accent)" }}>
+              The final reflection of the 10-year journey
             </p>
           </>
         ) : (
@@ -273,7 +344,7 @@ export default function Dashboard() {
               className="text-5xl font-serif font-bold"
               style={{ color: "var(--text-primary)" }}
             >
-              Day {dayNumber}
+              Day {displayDayNumber}
             </h1>
             <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
               of your {TOTAL_JOURNAL_DAYS}-day journey
@@ -296,14 +367,16 @@ export default function Dashboard() {
             />
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {dayNumber <= 0
-              ? `0 / ${TOTAL_JOURNAL_DAYS} days`
-              : <>{dayNumber} {dayNumber === 1 ? 'day' : 'days'} in &nbsp;·&nbsp; {(() => { const r = Math.max(TOTAL_JOURNAL_DAYS - dayNumber, 0); return `${r} ${r === 1 ? 'day' : 'days'} remaining`; })()}</>}
+            {isBefore(today, TRIAL_START)
+              ? `0 / ${TOTAL_TRIAL_DAYS} trial days`
+              : mainJourneyActive
+                ? <>{displayDayNumber} {displayDayNumber === 1 ? 'day' : 'days'} in &nbsp;·&nbsp; {(() => { const r = Math.max(TOTAL_JOURNAL_DAYS - displayDayNumber, 0); return `${r} ${r === 1 ? 'day' : 'days'} remaining`; })()}</>
+                : <>{displayDayNumber} {displayDayNumber === 1 ? 'trial day' : 'trial days'} in &nbsp;·&nbsp; unlocks June 1</>}
           </p>
         </div>
 
         {/* Pre-journey countdown */}
-        {!journeyStarted && !journeyComplete && (
+        {!isBefore(today, TRIAL_START) && trialMonthActive && !trialUnlocked && (
           <div
             className="card p-6 max-w-md mx-auto text-center space-y-2"
             style={{ borderTop: "3px solid var(--accent)" }}
@@ -312,11 +385,10 @@ export default function Dashboard() {
               className="text-lg font-semibold"
               style={{ color: "var(--text-primary)" }}
             >
-              Your journey begins in {daysUntilStart} day
-              {daysUntilStart !== 1 ? "s" : ""}
+              Complete the May trial to unlock June 1
             </p>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Starting {format(ORIGIN, "MMMM d, yyyy")}
+              Need all {TOTAL_TRIAL_DAYS} trial days completed
             </p>
           </div>
         )}
@@ -345,7 +417,7 @@ export default function Dashboard() {
       {/* ── PWA Install Banner ──────────────────────────── */}
       <InstallBanner />
       {/* ── Today Card ───────────────────────────────────── */}
-      {journeyStarted && !journeyComplete && (
+      {showTodayCard && !journeyComplete && (
         <TodayCard entry={todayEntry} todayId={todayId} navigate={navigate} />
       )}
 
@@ -370,7 +442,18 @@ export default function Dashboard() {
         />
       </section>
 
-      {(dayNumber > 0 || !journeyStarted) && (
+      <section className="card p-5 space-y-3">
+        <h2 className="section-title">Execution Reminders</h2>
+        <div className="space-y-2">
+          {ACTION_MESSAGES.map((message) => (
+            <p key={message} className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              {message}
+            </p>
+          ))}
+        </div>
+      </section>
+
+      {mainJourneyActive && (
         <section className="card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -385,7 +468,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-2xl font-bold font-mono" style={{ color: "var(--accent)" }}>
-              {dayNumber <= 0 ? 0 : phaseProgress}%
+              {journeyDayNumber <= 0 ? 0 : phaseProgress}%
             </p>
           </div>
 
@@ -393,7 +476,7 @@ export default function Dashboard() {
             <div
               className="h-2 rounded-full transition-all duration-500"
               style={{
-                width: `${dayNumber <= 0 ? 0 : phaseProgress}%`,
+                width: `${journeyDayNumber <= 0 ? 0 : phaseProgress}%`,
                 background: "var(--accent)",
               }}
             />
@@ -401,16 +484,16 @@ export default function Dashboard() {
 
           <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
             <span>
-              {dayNumber <= 0
-                ? `Phase begins ${format(ORIGIN, "MMMM d, yyyy")}`
-                : `Day ${dayNumber - currentPhase.start + 1} of ${currentPhase.end - currentPhase.start + 1} in this phase`}
+              {journeyDayNumber <= 0
+                ? `Phase begins ${format(TRIAL_START, "MMMM d, yyyy")}`
+                : `Day ${journeyDayNumber - currentPhase.start + 1} of ${currentPhase.end - currentPhase.start + 1} in this phase`}
             </span>
-            {dayNumber > 0 && nextPhase && (
+            {journeyDayNumber > 0 && nextPhase && (
               <span>
                 {daysUntilNext} days until {nextPhase.emoji} {nextPhase.name}
               </span>
             )}
-            {dayNumber > 0 && !nextPhase && (
+            {journeyDayNumber > 0 && !nextPhase && (
               <span style={{ color: "var(--accent)" }}>
                 Final phase 👑
               </span>
@@ -423,10 +506,10 @@ export default function Dashboard() {
                 key={p.name}
                 className="flex-1 text-center py-1 rounded text-xs"
                 style={{
-                  background: dayNumber >= p.start
+                  background: journeyDayNumber >= p.start
                     ? "var(--accent-subtle)"
                     : "var(--bg-secondary)",
-                  color: dayNumber >= p.start
+                  color: journeyDayNumber >= p.start
                     ? "var(--accent)"
                     : "var(--text-muted)",
                   fontSize: 9,
@@ -499,7 +582,7 @@ export default function Dashboard() {
               key={m.day}
               className="card p-3 text-center"
               style={
-                dayNumber >= m.day
+                journeyDayNumber >= m.day
                   ? { border: "1px solid rgba(245,158,11,0.45)" }
                   : undefined
               }
@@ -597,6 +680,34 @@ export default function Dashboard() {
           </button>
         </section>
       )}
+
+      <section className="space-y-4">
+        <h2 className="section-title">Starred Quotes</h2>
+        {starredQuotes.length === 0 ? (
+          <div className="card p-5 text-sm" style={{ color: "var(--text-muted)" }}>
+            Star quotes in Day Entry to see them here.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {starredQuotes.map((entry) => (
+              <button
+                key={`${entry.id}-quote`}
+                onClick={() => navigate(`/entry/${entry.id}`)}
+                className="card p-4 w-full text-left cursor-pointer space-y-1"
+                style={{ border: "1px solid var(--border-subtle)" }}
+              >
+                <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>{format(parseISO(entry.id), "MMM d, yyyy")}</span>
+                  <span>⭐</span>
+                </div>
+                <p className="text-sm italic" style={{ color: "var(--text-primary)" }}>
+                  "{truncate(entry.quoteOfDay.trim(), 200)}"
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ── Random Entry Button ──────────────────────────── */}
       <div className="text-center pt-4">

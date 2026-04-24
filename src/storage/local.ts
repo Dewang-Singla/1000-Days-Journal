@@ -45,6 +45,14 @@ function isValidHabitLog(value: unknown): boolean {
   );
 }
 
+function isValidRatingChecks(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 10 && value.every((item) => typeof item === "boolean");
+}
+
+function isValidCheckpointPrompts(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 10 && value.every((item) => typeof item === "string");
+}
+
 function isValidDayEntry(value: unknown): value is DayEntry {
   if (!isObjectRecord(value)) return false;
   return (
@@ -53,6 +61,10 @@ function isValidDayEntry(value: unknown): value is DayEntry {
     typeof value.date === "string" &&
     typeof value.moodRating === "number" &&
     typeof value.moodEmoji === "string" &&
+    isValidRatingChecks(value.ratingChecks) &&
+    isValidCheckpointPrompts(value.checkpointPrompts) &&
+    typeof value.quoteOfDay === "string" &&
+    typeof value.isQuoteStarred === "boolean" &&
     typeof value.journal === "string" &&
     Array.isArray(value.todos) && value.todos.every(isValidTodo) &&
     Array.isArray(value.habitLogs) && value.habitLogs.every(isValidHabitLog) &&
@@ -166,6 +178,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
     return all.filter((entry) => {
       if (entry.journal.toLowerCase().includes(q)) return true;
+      if (entry.quoteOfDay.toLowerCase().includes(q)) return true;
       if (entry.tags.some((t) => t.toLowerCase().includes(q))) return true;
       if (entry.gratitude.some((g) => g.toLowerCase().includes(q))) return true;
       if (entry.memories.some((m) => m.content.toLowerCase().includes(q)))

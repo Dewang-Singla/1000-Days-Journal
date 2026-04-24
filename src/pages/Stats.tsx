@@ -22,9 +22,8 @@ import {
 
 import storage from "../storage";
 import {
-  getDayNumber,
+  getJourneyDayNumber,
   dateToId,
-  ORIGIN,
   JOURNAL_END,
   TOTAL_JOURNAL_DAYS,
 } from "../utils/dates";
@@ -66,10 +65,10 @@ function moodHex(r: number): string {
 
 const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const LINE_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#EF4444", "#A855F7"];
-const JOURNEY_START = ORIGIN;
+const JOURNEY_START = new Date(2026, 5, 1);
 const JOURNEY_END = JOURNAL_END;
 
-const MILESTONES = [505, 1010, 1515, 2020, 2525, 3030, TOTAL_JOURNAL_DAYS];
+const MILESTONES = [350, 700, 1050, 1400, 1750, 2100, 2450, 2800, 3150, TOTAL_JOURNAL_DAYS];
 
 /* ── Custom tooltip wrapper ───────────────────────────────── */
 
@@ -338,7 +337,7 @@ export default function Stats() {
 
   /* ── Reached milestones ───────────────────────────────── */
   const reachedDays = useMemo(() => new Set(contentEntries.map((e) => e.dayNumber)), [contentEntries]);
-  const todayDayNum = getDayNumber(new Date());
+  const todayDayNum = getJourneyDayNumber(new Date());
 
   /* ── Loading ──────────────────────────────────────────── */
   if (isLoading) {

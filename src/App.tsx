@@ -27,7 +27,7 @@ const Reflection = lazy(() => import("./pages/Reflection"));
 const Settings = lazy(() => import("./pages/Settings"));
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import { useUIStore } from "./store/uiStore";
-import { getDayNumber, ORIGIN, TOTAL_JOURNAL_DAYS } from "./utils/dates";
+import { getDayNumber, getTrialDayNumber, TRIAL_START, TOTAL_JOURNAL_DAYS, TOTAL_TRIAL_DAYS, isTrialMonth } from "./utils/dates";
 import { hashPin } from "./utils/crypto";
 
 /* ── Nav config ─────────────────────────────────────────────── */
@@ -80,14 +80,20 @@ function App() {
   const toggleSidebarCollapsed = useUIStore((s) => s.toggleSidebarCollapsed);
 
   const today = new Date();
-  const rawDayNumber = getDayNumber(today);
-  const dayNumber = rawDayNumber;
+  const dayNumber = getDayNumber(today);
+  const trialDayNumber = getTrialDayNumber(today);
+  const inTrialMonth = isTrialMonth(today);
   const progress = Math.min(Math.max(dayNumber / TOTAL_JOURNAL_DAYS, 0), 1);
-  const startLabel = ORIGIN.toLocaleDateString("en-US", {
+  const startLabel = TRIAL_START.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+  const progressLabel = today < TRIAL_START
+    ? `Starts ${startLabel}`
+    : inTrialMonth
+      ? `Trial Day ${trialDayNumber} of ${TOTAL_TRIAL_DAYS}`
+      : `Day ${dayNumber} of ${TOTAL_JOURNAL_DAYS}`;
 
   /* ── PIN lock state ─────────────────────────────────────── */
   const [isLocked, setIsLocked] = useState(() => {
@@ -342,12 +348,10 @@ function App() {
               <div className="space-y-2 px-1">
                 <div className="flex justify-between items-baseline text-xs">
                   <span style={{ color: "var(--text-primary)" }} className="font-semibold">
-                    {dayNumber <= 0
-                      ? `Starts ${startLabel}`
-                      : `Day ${dayNumber} of ${TOTAL_JOURNAL_DAYS}`}
+                    {progressLabel}
                   </span>
                   <span style={{ color: "var(--text-muted)" }}>
-                    {dayNumber <= 0 ? "0%" : `${Math.round(progress * 100)}%`}
+                    {today < TRIAL_START ? "0%" : `${Math.round(progress * 100)}%`}
                   </span>
                 </div>
                 <div
@@ -357,7 +361,7 @@ function App() {
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${dayNumber <= 0 ? 0 : progress * 100}%`,
+                      width: `${today < TRIAL_START ? 0 : progress * 100}%`,
                       background: "var(--accent)",
                     }}
                   />

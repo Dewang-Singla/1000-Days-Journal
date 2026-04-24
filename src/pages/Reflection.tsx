@@ -618,7 +618,7 @@ function YearTab({
           }}
         >
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Every 101st day is your reflection, planning, and enjoy day.
+            Reflections happen on the last Sunday of each month, with a final golden reflection on December 31, 2035.
           </p>
         </div>
       </section>

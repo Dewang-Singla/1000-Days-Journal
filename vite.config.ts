@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         name: '10 Years Journal',
         short_name: '10 Years',
-        description: 'Your personal 10-year life journal — April 27, 2026 to December 30, 2035',
+        description: 'Your personal 10-year life journal with a May 2026 trial month, June 1 unlock, and December 31, 2035 golden reflection day',
         theme_color: '#F59E0B',
         background_color: '#0F0F0F',
         display: 'standalone',

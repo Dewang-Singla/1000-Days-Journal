@@ -1,13 +1,13 @@
 # 10 Years Journal
 
-10 Years Journal is a local-first Progressive Web App for documenting a fixed personal journey from April 27, 2026 through December 30, 2035.
+10 Years Journal is a local-first Progressive Web App for documenting a fixed personal journey from May 1, 2026 through December 31, 2035.
 
 It combines daily journaling, mood tracking, habits, timeline browsing, analytics, and end-of-journey reflections in a single offline-capable app.
 
 ## Project Overview
 
 - Purpose: support a long-form, structured 10-year self-tracking journey.
-- Data model: every day is represented by a date id and day number, with rich entry content.
+- Data model: every day is represented by a date id and journey day number, with rich entry content.
 - Storage model: all data is persisted in IndexedDB via Dexie. No backend API is used.
 - Platform model: installable PWA with responsive desktop and mobile navigation.
 
@@ -15,36 +15,42 @@ It combines daily journaling, mood tracking, habits, timeline browsing, analytic
 
 ### Daily Writing and Tracking
 - Rich text journal editor (TipTap) with formatting and image URL embeds.
-- Mood rating scale from 0 to 10 with emoji labels (Lost to Legendary).
+- Daily rating uses 10 checkpoint checkboxes, with one point per checked item.
 - Structured entry content: todos, gratitude items, tags, memories, habit logs, highlights.
 - Auto-save behavior through state updates and debounced persistence.
 
 ### Journey Mechanics
+- Trial month: May 2026 is a warm-up month that must be completed before the main journey unlocks.
+- Main journey: June 1, 2026 through December 30, 2035.
+- Golden reflection day: December 31, 2035 closes the journey.
+- Monthly reflection cadence: from June 2026 onward, the last Sunday of each month is a reflection day.
 - Fixed date window validation for journal entries.
 - Daily timing windows:
 	- To-do add/delete is editable until 8:00 PM of that day.
 	- To-do checkboxes (done/undone) remain toggleable from 8:00 PM until 12:00 PM next day.
-	- Reflection sections (mood, journal, habits toggle, tags, gratitude, memories) are editable from 8:00 PM until 12:00 PM next day.
+	- Reflection sections (checkpoints, journal, habits toggle, tags, gratitude, memories) are editable from 8:00 PM until 12:00 PM next day.
 	- After 12:00 PM next day, the entry is read-only.
 - Streak freeze system: up to 2 freezes in a rolling 30-day cycle.
-- Reflection chamber locked until Dec 30, 2035.
-- Reflection cadence: 100 journal days plus 1 reflection day, for 35 reflection days total.
+- Rating system: each day includes 10 checkpoint checkboxes, and each checkmark awards one point.
 
 ### Milestones
 
 | Day | Date |
 | --- | --- |
-| 505 | Sep 13, 2027 |
-| 1010 | Jan 30, 2029 |
-| 1515 | Jun 19, 2030 |
-| 2020 | Nov 6, 2031 |
-| 2525 | Mar 25, 2033 |
-| 3030 | Aug 12, 2034 |
-| 3535 | Dec 30, 2035 |
+| 350 | May 16, 2027 |
+| 700 | Apr 30, 2028 |
+| 1050 | Apr 15, 2029 |
+| 1400 | Mar 31, 2030 |
+| 1750 | Mar 16, 2031 |
+| 2100 | Feb 29, 2032 |
+| 2450 | Feb 13, 2033 |
+| 2800 | Jan 29, 2034 |
+| 3150 | Jan 14, 2035 |
+| 3500 | Dec 30, 2035 |
 
 ### Exploration and Insights
 - Dashboard with progress, phase context, streak data, and quick actions.
-- Calendar with mood-colored cells and monthly summaries.
+- Calendar with trial, common, monthly-reflection, and golden-day color schemes plus monthly summaries.
 - Timeline with filters (all, highlights, tags) and incremental loading.
 - Search across journal text, tags, gratitude, and memories with result snippets.
 - Stats tabs for overview, mood trends/distribution, habits, tags, and milestone status.

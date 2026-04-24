@@ -3,6 +3,7 @@ import type { DayEntry } from "../db";
 import { parseISO } from "date-fns";
 import storage from "../storage";
 import { getDayNumber, dateToId } from "../utils/dates";
+import { normalizeCheckpointPrompts } from "../utils/checkpoints";
 
 interface EntryState {
   currentEntry: DayEntry | null;
@@ -37,6 +38,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       date: dateToId(date),
       moodRating: -1,
       moodEmoji: "",
+      ratingChecks: Array.from({ length: 10 }, () => false),
+      checkpointPrompts: normalizeCheckpointPrompts(undefined),
+      quoteOfDay: "",
+      isQuoteStarred: false,
       journal: "",
       todos: [],
       habitLogs: [],

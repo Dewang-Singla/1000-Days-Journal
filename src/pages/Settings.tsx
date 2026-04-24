@@ -12,7 +12,7 @@ import storage from "../storage";
 import { useUIStore } from "../store/uiStore";
 import { useHabitStore } from "../store/habitStore";
 import { hashPin } from "../utils/crypto";
-import { ORIGIN, JOURNAL_END } from "../utils/dates";
+import { TRIAL_START, GOLDEN_REFLECTION_DAY } from "../utils/dates";
 
 /* ── Constants ──────────────────────────────────────────────── */
 
@@ -181,7 +181,7 @@ export default function Settings() {
           Settings
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Manage your journal data and preferences for {ORIGIN.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} - {JOURNAL_END.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            Manage your journal data and preferences for {TRIAL_START.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} - {GOLDEN_REFLECTION_DAY.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
       </div>
 
@@ -553,8 +553,8 @@ export default function Settings() {
           <p className="text-base font-serif font-bold" style={{ color: "var(--text-primary)" }}>
             10 Years Journal
           </p>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Your personal journey: {ORIGIN.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} - {JOURNAL_END.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Your personal journey: {TRIAL_START.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} - {GOLDEN_REFLECTION_DAY.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </p>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
             Built with React, TypeScript, TailwindCSS, Dexie.js

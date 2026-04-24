@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { normalizeCheckpointPrompts } from "../utils/checkpoints";
 
 // ── Sub-document types ──────────────────────────────────────────────
 
@@ -38,6 +39,10 @@ export interface DayEntry {
   date: string;
   moodRating: number;
   moodEmoji: string;
+  ratingChecks: boolean[];
+  checkpointPrompts: string[];
+  quoteOfDay: string;
+  isQuoteStarred: boolean;
   journal: string;
   todos: Todo[];
   habitLogs: HabitLog[];
@@ -110,6 +115,52 @@ class JournalDB extends Dexie {
       reflections: "id, promptId",
       streakFreezes: "++id, usedAt, forDateId",
     });
+
+    this.version(5).stores({
+      entries: "id, dayNumber, date, moodRating, isHighlight, *tags",
+      habits: "id, name",
+      reflections: "id, promptId",
+      streakFreezes: "++id, usedAt, forDateId",
+    }).upgrade((tx) => tx.table("entries").toCollection().modify((entry: Partial<DayEntry>) => {
+      entry.ratingChecks ??= Array.from({ length: 10 }, () => false);
+      entry.checkpointPrompts = normalizeCheckpointPrompts(entry.checkpointPrompts);
+      entry.quoteOfDay ??= "";
+      entry.isQuoteStarred ??= false;
+      entry.todos ??= [];
+      entry.habitLogs ??= [];
+      entry.tags ??= [];
+      entry.gratitude ??= [];
+      entry.memories ??= [];
+      entry.moodEmoji ??= "";
+      entry.isHighlight ??= false;
+      entry.wordCount ??= 0;
+      entry.createdAt ??= new Date().toISOString();
+      entry.updatedAt ??= entry.createdAt;
+    }));
+
+    this.version(6).stores({
+      entries: "id, dayNumber, date, moodRating, isHighlight, *tags",
+      habits: "id, name",
+      reflections: "id, promptId",
+      streakFreezes: "++id, usedAt, forDateId",
+    }).upgrade((tx) => tx.table("entries").toCollection().modify((entry: Partial<DayEntry>) => {
+      entry.ratingChecks = Array.isArray(entry.ratingChecks)
+        ? entry.ratingChecks.slice(0, 10).concat(Array.from({ length: Math.max(0, 10 - entry.ratingChecks.length) }, () => false))
+        : Array.from({ length: 10 }, () => false);
+      entry.checkpointPrompts = normalizeCheckpointPrompts(entry.checkpointPrompts);
+      entry.quoteOfDay ??= "";
+      entry.isQuoteStarred ??= false;
+      entry.todos ??= [];
+      entry.habitLogs ??= [];
+      entry.tags ??= [];
+      entry.gratitude ??= [];
+      entry.memories ??= [];
+      entry.moodEmoji ??= "";
+      entry.isHighlight ??= false;
+      entry.wordCount ??= 0;
+      entry.createdAt ??= new Date().toISOString();
+      entry.updatedAt ??= entry.createdAt;
+    }));
   }
 }
 
